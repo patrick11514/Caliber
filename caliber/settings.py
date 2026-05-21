@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "core",
+    "api",
 ]
 
 MIDDLEWARE = [
@@ -119,5 +120,8 @@ STATIC_URL = "static/"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "frontend" / "dist",
+    # BASE_DIR / "frontend" / "dist",
 ]
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
