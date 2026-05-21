@@ -1,34 +1,100 @@
 from django.core.management.base import BaseCommand
-from core.models import Gene, GeneVariant, Patient, ClinVarGeneVariant
+from core.models import Gene, GeneVariant, GeneticReport, Patient, PatientVariant
 import glob
 import polars as pl
 from openpyxl import load_workbook
+from django.db import transaction
+
+patient_cache = {}
+gene_cache = {}
+variant_cache = {}
 
 def sheet_exists(path: str, sheet: str) -> bool:
     wb = load_workbook(path, read_only=True)
     return sheet in wb.sheetnames
+
+def clean_str(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def clean_int(value: object) -> int | None:
+    if value in (None, "", "nan"):
+        return None
+    return int(value)
+
+def parse_row(row) -> dict:
+    cleaned_data = {}
+    cleaned_data["patient_name"] = clean_str(row.get("Name"))
+    cleaned_data["gene_symbol"] = clean_str(row.get("Symbol") or row.get("Gene"))
+    cleaned_data["variant"] = clean_str(row.get("Variant_class") or row.get("Variation Type"))
+    cleaned_data["chromosome"] = clean_str(row.get("Chr"))
+    cleaned_data["position"] = clean_int(row.get("Coordinate") or row.get("Start Position"))
+    cleaned_data["dbSNP"] = clean_str(row.get("VEP dbSNP ID", "") or row.get("dbSNP", ""))
+    cleaned_data["hgvs_c"] = clean_str(row.get("HGVSc") or row.get("Transcript"))
+    cleaned_data["hgvs_c"] += clean_str(row.get("Nucleotide", ""))
+    cleaned_data["hgvs_p"] = clean_str(row.get("HGVSp", "") or row.get("AA Change", ""))
+    cleaned_data["category"] = clean_str(row.get("Kategorie"))
+    cleaned_data["comment"] = clean_str(row.get("Komentář", ""))
+    cleaned_data["exon"] = clean_str(row.get("Exon"))
+    cleaned_data["zygosity"] = clean_str(row.get("Genotype") or row.get("Zygosity"))
+    cleaned_data["gnomAD"] = clean_str(row.get("gnomAD AF") or row.get("gnomAD (Exome)"))
+
+    return cleaned_data
+
+def persist_row(data):
+    if data["patient_name"] not in patient_cache:
+        patient, _ = Patient.objects.get_or_create(name=data["patient_name"])
+        patient_cache[data["patient_name"]] = patient
+    else:
+        patient = patient_cache[data["patient_name"]]
+
+    if data["gene_symbol"] not in gene_cache:
+        gene, _ = Gene.objects.get_or_create(symbol=data["gene_symbol"])
+        gene_cache[data["gene_symbol"]] = gene
+    else:
+        gene = gene_cache[data["gene_symbol"]]
+
+    if (data["gene_symbol"], data["chromosome"], data["position"], data["variant"], data["hgvs_c"]) not in variant_cache:
+        gene_variant, _ = GeneVariant.objects.get_or_create(
+            gene=gene,
+            chromosome=data["chromosome"],
+            position=data["position"],
+            variation_type=data["variant"],
+            hgvs_c=data["hgvs_c"],
+            defaults={
+                "hgvs_p": data["hgvs_p"],
+                "dbsnp": data["dbSNP"],
+            }
+        )
+        variant_cache[(data["gene_symbol"], data["chromosome"], data["position"], data["variant"], data["hgvs_c"])] = gene_variant
+    else:
+        gene_variant = variant_cache[(data["gene_symbol"], data["chromosome"], data["position"], data["variant"], data["hgvs_c"])]
+
+    report, _ = GeneticReport.objects.get_or_create(
+        patient=patient,
+        report_name=f"{data['patient_name']} - {data['gene_symbol']} {data['variant']}"
+    )
+
+    p_v, _ = PatientVariant.objects.get_or_create(
+        report=report,
+        variant=gene_variant,
+        exon=data["exon"],
+        gnomAD=data["gnomAD"],
+        zygosity=data["zygosity"],
+        category=data["category"],
+        comment=data["comment"],
+    )
 
 def parse_df(df: pl.DataFrame):
     """"
     Parses wanted fields excel data from the given DataFrame, the variable names depends on the format (Finalist/Franklin)
     """
     for row in df.iter_rows(named=True):
-        print(row, type(row))
-        patient_name = row.get("Name")
-        gene_symbol = row.get("Symbol") or row.get("Gene")
-        variant = row.get("Variant_class") or row.get("Variation Type")
-        chromosome = row.get("Chr")
-        position = row.get("Coordinate") or row.get("Start Position")
-        dbSNP = row.get("VEP dbSNP ID") or row.get("dbSNP")
-        hgvs_c = row.get("HGVSc") or row.get("Transcript")
-        hgvs_c += row.get("Nucleotide", "")
-        hgvs_p = row.get("HGVSp") or row.get("AA Change")
-        category = row.get("Kategorie")
-        comment = row.get("Komentář")
-        exon = row.get("Exon")
-        zygosity = row.get("Genotype") or row.get("Zygosity")
-        gnomAD = row.get("gnomAD AF") or row.get("gnomAD (Exome)")
-        print(f"Parsed row: patient_name={patient_name}, gene_symbol={gene_symbol}, chromosome={chromosome}, position={position}, dbSNP={dbSNP}, hgvs_c={hgvs_c}, hgvs_p={hgvs_p}, category={category}, comment={comment}, exon={exon}, zygosity={zygosity}, gnomAD={gnomAD}")
+        cleaned_data = parse_row(row)
+        persist_row(cleaned_data)
+        
 
 
 class Command(BaseCommand):
@@ -47,7 +113,7 @@ class Command(BaseCommand):
 
         for file in glob.iglob(f"{root_dir}/**/*.xls*", recursive=True):
             print(f"Importing data from {file}...")
-            df = None        
+            df = None
 
             if file.endswith(".xlsx") and sheet_exists(file, "default"):
                 df = pl.read_excel(file, sheet_name="default")
@@ -57,7 +123,7 @@ class Command(BaseCommand):
                 except Exception as e:
                     df = pl.read_excel(file)
             
-            parse_df(df)
-            print(df.head())
+            with transaction.atomic():
+                parse_df(df)
 
         
