@@ -215,8 +215,8 @@
     <div class="card list">
       <div class="list-head">
         <div>
-          <h2>Search results</h2>
-          <p class="muted">Matching variants from your dataset</p>
+          <h2>Výsledky hledání</h2>
+          <p class="muted">Shodující se varianty z vašeho datasetu</p>
         </div>
         <button type="button" class="ghost" on:click={runSearch}>
           Obnovit
@@ -234,7 +234,7 @@
         </div>
         {#if results.length === 0}
           <div class="row empty">
-            <span class="muted">No results yet. Try a search above.</span>
+            <span class="muted">Žádná shoda</span>
           </div>
         {:else}
           {#each results as item}
