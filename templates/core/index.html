@@ -5,10 +5,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Caliber</title>
-    <link rel="stylesheet" href="{% static 'svelte/main.css' %}">
+    {% if debug %}
+        <link rel="stylesheet" href="http://localhost:5173/src/app.css">
+    {% else %}
+        <link rel="stylesheet" href="{% static 'svelte/main.css' %}">
+    {% endif %}
 </head>
 <body>
     <div id="svelte-app"></div>
-    <script src="{% static 'svelte/main.js' %}" defer></script>
+    {% if debug %}
+        <script type="module" src="http://localhost:5173/src/main.ts"></script>
+    {% else %}
+        <script src="{% static 'svelte/main.js' %}" defer></script>
+    {% endif %}
 </body>
 </html>
