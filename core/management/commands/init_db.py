@@ -43,7 +43,7 @@ def parse_row(row) -> dict:
 
     return cleaned_data
 
-def persist_row(data):
+def persist_row(data: dict, file_name: str):
     if data["patient_name"] not in patient_cache:
         patient, _ = Patient.objects.get_or_create(name=data["patient_name"])
         patient_cache[data["patient_name"]] = patient
@@ -74,7 +74,7 @@ def persist_row(data):
 
     report, _ = GeneticReport.objects.get_or_create(
         patient=patient,
-        report_name=f"{data['patient_name']} - {data['gene_symbol']} {data['variant']}"
+        report_name=f"{file_name}"
     )
 
     p_v, _ = PatientVariant.objects.get_or_create(
@@ -87,13 +87,13 @@ def persist_row(data):
         comment=data["comment"],
     )
 
-def parse_df(df: pl.DataFrame):
+def parse_df(df: pl.DataFrame, file_name: str):
     """"
     Parses wanted fields excel data from the given DataFrame, the variable names depends on the format (Finalist/Franklin)
     """
     for row in df.iter_rows(named=True):
         cleaned_data = parse_row(row)
-        persist_row(cleaned_data)
+        persist_row(cleaned_data, file_name)
         
 
 
@@ -111,19 +111,19 @@ class Command(BaseCommand):
     def handle(self, *args: tuple, **options: dict) -> None:
         root_dir = options.get("root_dir") or self.DEFAULT_ROOT_DIR
 
-        for file in glob.iglob(f"{root_dir}/**/*.xls*", recursive=True):
-            print(f"Importing data from {file}...")
+        for file_name in glob.iglob(f"{root_dir}/**/*.xls*", recursive=True):
+            print(f"Importing data from {file_name}...")
             df = None
 
-            if file.endswith(".xlsx") and sheet_exists(file, "default"):
-                df = pl.read_excel(file, sheet_name="default")
+            if file_name.endswith(".xlsx") and sheet_exists(file_name, "default"):
+                df = pl.read_excel(file_name, sheet_name="default")
             else:
                 try:
-                    df = pl.read_excel(file, sheet_name="Filtr JI")
+                    df = pl.read_excel(file_name, sheet_name="Filtr JI")
                 except Exception as e:
-                    df = pl.read_excel(file)
+                    df = pl.read_excel(file_name)
             
             with transaction.atomic():
-                parse_df(df)
+                parse_df(df, file_name)
 
         

@@ -55,35 +55,52 @@ def search_variants(request):
 
 @require_POST
 def upload_variants_file(request):
-	uploaded = request.FILES.get("file")
-	if not uploaded:
+	uploaded_files = request.FILES.getlist("file")
+	if not uploaded_files:
 		return JsonResponse({"error": "No file provided."}, status=400)
 
-	allowed_extensions = {".xlsx", ".xls"}
-	name = uploaded.name
-	name_lower = name.lower()
-	if not any(name_lower.endswith(ext) for ext in allowed_extensions):
-		return JsonResponse({"error": "Unsupported file type."}, status=400)
+	allowed_extensions = {".xlsx", ".xls", ".csv"}
+	for uploaded in uploaded_files:
+		name_lower = uploaded.name.lower()
+		if not any(name_lower.endswith(ext) for ext in allowed_extensions):
+			return JsonResponse(
+				{"error": f"Unsupported file type: {uploaded.name}."},
+				status=400,
+			)
 
-	suffix = os.path.splitext(name_lower)[1]
-	with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
-		for chunk in uploaded.chunks():
-			tmp_file.write(chunk)
-		tmp_path = tmp_file.name
+	results = []
+	for uploaded in uploaded_files:
+		name = uploaded.name
+		name_lower = name.lower()
+		suffix = os.path.splitext(name_lower)[1]
+		with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+			for chunk in uploaded.chunks():
+				tmp_file.write(chunk)
+			tmp_path = tmp_file.name
 
-	try:
-		if suffix == ".xlsx" and sheet_exists(tmp_path, "default"):
-			df = pl.read_excel(tmp_path, sheet_name="default")
-		else:
-			try:
-				df = pl.read_excel(tmp_path, sheet_name="Filtr JI")
-			except Exception:
-				df = pl.read_excel(tmp_path)
+		try:
+			if suffix == ".csv":
+				df = pl.read_csv(tmp_path)
+			elif suffix == ".xlsx" and sheet_exists(tmp_path, "default"):
+				df = pl.read_excel(tmp_path, sheet_name="default")
+			else:
+				try:
+					df = pl.read_excel(tmp_path, sheet_name="Filtr JI")
+				except Exception:
+					df = pl.read_excel(tmp_path)
 
-		with transaction.atomic():
-			parse_df(df)
-		row_count = df.height
-	finally:
-		os.unlink(tmp_path)
+			with transaction.atomic():
+				parse_df(df, name)
+			row_count = df.height
+		finally:
+			os.unlink(tmp_path)
 
-	return JsonResponse({"filename": name, "rows": row_count})
+		results.append({"filename": name, "rows": row_count})
+
+	return JsonResponse(
+		{
+			"filenames": [item["filename"] for item in results],
+			"rows": sum(item["rows"] for item in results),
+			"files": results,
+		}
+	)

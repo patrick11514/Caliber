@@ -19,10 +19,12 @@
   let isSearching = false
   let errorMessage = ''
   let results: Variant[] = []
-  let uploadFile: File | null = null
+  let uploadFiles: File[] = []
   let uploadMessage = ''
   let uploadError = ''
   let isUploading = false
+  let isDragActive = false
+  let fileInputRef: HTMLInputElement | null = null
 
   const runSearch = async () => {
     errorMessage = ''
@@ -34,7 +36,7 @@
     })
 
     if (![...params.values()].some((value) => value.length > 0)) {
-      errorMessage = 'Enter at least one search field.'
+      errorMessage = 'Vyplňte alespoň jedno vyhledávací pole.'
       return
     }
 
@@ -86,13 +88,13 @@
   const handleUpload = async () => {
     uploadMessage = ''
     uploadError = ''
-    if (!uploadFile) {
+    if (uploadFiles.length === 0) {
       uploadError = 'Vyberte soubor pro nahrání.'
       return
     }
 
     const formData = new FormData()
-    formData.append('file', uploadFile)
+    uploadFiles.forEach((file) => formData.append('file', file))
 
     isUploading = true
     try {
@@ -107,9 +109,18 @@
         const payload = (await response.json()) as { error?: string }
         throw new Error(payload.error || 'Upload failed.')
       }
-      const payload = (await response.json()) as { filename: string }
-      uploadMessage = `Soubor ${payload.filename} byl nahrán.`
-      uploadFile = null
+      const payload = (await response.json()) as { filename?: string; filenames?: string[] }
+      if (payload.filenames && payload.filenames.length > 0) {
+        uploadMessage = `Nahráno souborů: ${payload.filenames.length}.`
+      } else if (payload.filename) {
+        uploadMessage = `Soubor ${payload.filename} byl nahrán.`
+      } else {
+        uploadMessage = 'Soubor(y) byly nahrány.'
+      }
+      uploadFiles = []
+      if (fileInputRef) {
+        fileInputRef.value = ''
+      }
     } catch (error) {
       uploadError = error instanceof Error ? error.message : 'Upload failed.'
     } finally {
@@ -117,13 +128,97 @@
     }
   }
 
+  const acceptFiles = (files: File[]) => {
+    uploadMessage = ''
+    uploadError = ''
+    uploadFiles = files
+  }
+
+  const appendFiles = (files: File[]) => {
+    if (files.length === 0) {
+      return uploadFiles
+    }
+    uploadMessage = ''
+    uploadError = ''
+    const seen = new Set(uploadFiles.map((file) => `${file.name}-${file.size}-${file.lastModified}`))
+    const merged = [...uploadFiles]
+    files.forEach((file) => {
+      const key = `${file.name}-${file.size}-${file.lastModified}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        merged.push(file)
+      }
+    })
+    uploadFiles = merged
+    return merged
+  }
+
+  const clearSelectedFile = () => {
+    uploadMessage = ''
+    uploadError = ''
+    uploadFiles = []
+    if (fileInputRef) {
+      fileInputRef.value = ''
+    }
+  }
+
+  const removeFile = (index: number) => {
+    uploadFiles = uploadFiles.filter((_, itemIndex) => itemIndex !== index)
+    if (uploadFiles.length === 0) {
+      clearSelectedFile()
+    }
+  }
+
+  const handleFileChange = (event: Event) => {
+    const target = event.currentTarget as HTMLInputElement
+    appendFiles(target.files ? Array.from(target.files) : [])
+  }
+
+  const handleDrop = (event: DragEvent) => {
+    event.preventDefault()
+    isDragActive = false
+    const droppedFiles = event.dataTransfer?.files
+      ? Array.from(event.dataTransfer.files)
+      : []
+    const mergedFiles = appendFiles(droppedFiles)
+    if (fileInputRef) {
+      const dataTransfer = new DataTransfer()
+      mergedFiles.forEach((file) => dataTransfer.items.add(file))
+      fileInputRef.files = dataTransfer.files
+    }
+  }
+
+  const handleDragOver = (event: DragEvent) => {
+    event.preventDefault()
+    isDragActive = true
+  }
+
+  const handleDragLeave = () => {
+    isDragActive = false
+  }
+
+  const openFileDialog = () => {
+    fileInputRef?.click()
+  }
+
+  const handleDropzoneKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openFileDialog()
+    }
+  }
+
   const categoryClass = (value: string) => {
     const code = value.trim()
     if (code === '0') return 'category c0'
     if (code === '1') return 'category c1'
+    if (code === '1-2') return 'category c1-2'
     if (code === '2') return 'category c2'
+    if (code === '2-3') return 'category c2-3'
     if (code === '3') return 'category c3'
+    if (code === '3-4') return 'category c3-4'
     if (code === '4') return 'category c4'
+    if (code === '4-5') return 'category c4-5'
     if (code === '5') return 'category c5'
     return 'category'
   }
@@ -139,7 +234,7 @@
       </div>
       <div>
         <p class="eyebrow">Caliber</p>
-        <h1>Clinical Variant Registry</h1>
+        <h1>Klinický registr variant</h1>
       </div>
     </div>
     <div class="status">
@@ -182,20 +277,69 @@
       {/if}
     </div>
     <div class="card hero">
-      <h2>Nahrání Excelu</h2>
+      <h2>Nahrání Dat</h2>
       <p>
-        Nahrajte Excel nebo CSV z vaší analýzy. Soubor uložíme
-        a připravíme ke zpracování.
+        Nahrajte Excel z vaší analýzy. Soubor bude zpracován a nahrán do databáze.
       </p>
       <div class="upload-panel">
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          on:change={(event) => {
-            const target = event.currentTarget as HTMLInputElement
-            uploadFile = target.files ? target.files[0] : null
-          }}
-        />
+        <div
+          class={`dropzone ${isDragActive ? 'drag-active' : ''}`}
+          role="button"
+          tabindex="0"
+          on:click={openFileDialog}
+          on:keydown={handleDropzoneKeydown}
+          on:dragover={handleDragOver}
+          on:dragleave={handleDragLeave}
+          on:drop={handleDrop}
+        >
+          <input
+            bind:this={fileInputRef}
+            class="file-input"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            multiple
+            on:change={handleFileChange}
+          />
+          <div class="dropzone-content">
+            <span class="dropzone-title">Přetáhněte soubor nebo</span>
+            <span class="browse-button">Vybrat soubor</span>
+            <span class="dropzone-hint">Podporuje .xlsx, .xls, .csv</span>
+          </div>
+          <div class="file-meta">
+            <span class="file-name">
+              {uploadFiles.length > 0
+                ? `Vybráno souborů: ${uploadFiles.length}`
+                : 'Soubor nevybrán'}
+            </span>
+            {#if uploadFiles.length > 0}
+              <button
+                type="button"
+                class="clear-file"
+                aria-label="Odebrat všechny soubory"
+                on:click|stopPropagation={clearSelectedFile}
+              >
+                Odebrat vše
+              </button>
+            {/if}
+          </div>
+          {#if uploadFiles.length > 0}
+            <ul class="file-list">
+              {#each uploadFiles as file, index}
+                <li class="file-item">
+                  <span>{file.name}</span>
+                  <button
+                    type="button"
+                    class="remove-file"
+                    aria-label={`Odebrat ${file.name}`}
+                    on:click|stopPropagation={() => removeFile(index)}
+                  >
+                    Odebrat
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
         <div class="hero-actions">
           <button type="button" class="ghost" disabled={isUploading} on:click={handleUpload}>
             {isUploading ? 'Nahrávám...' : 'Nahrát soubor'}
