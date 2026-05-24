@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from core.models import Gene, GeneVariant, GeneticReport, Patient, PatientVariant
+from apps.core.models import Gene, GeneVariant, GeneticReport, Patient, PatientVariant
 import glob
 import polars as pl
 from openpyxl import load_workbook

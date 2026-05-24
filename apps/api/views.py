@@ -7,8 +7,8 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from core.management.commands.init_db import parse_df, sheet_exists
-from core.models import PatientVariant
+from apps.core.management.commands.init_db import parse_df, sheet_exists
+from apps.core.models import PatientVariant
 
 
 def search_variants(request):
