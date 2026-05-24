@@ -72,6 +72,7 @@ def persist_row(data: dict, file_name: str):
     else:
         gene_variant = variant_cache[(data["gene_symbol"], data["chromosome"], data["position"], data["variant"], data["hgvs_c"])]
 
+    # TODO - ADD date of the file creation as the created_at and updated_at so it matches the date of the report, not the date of the import
     report, _ = GeneticReport.objects.get_or_create(
         patient=patient,
         report_name=f"{file_name}"

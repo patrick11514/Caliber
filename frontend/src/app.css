@@ -499,65 +499,58 @@ input {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  color: black;
 }
 
 .category.c0 {
   background: rgba(52, 125, 255, 0.18);
-  color: #1f4fc2;
   border-color: rgba(52, 125, 255, 0.35);
 }
 
 .category.c1 {
   background: rgba(92, 214, 154, 0.18);
-  color: #7bc49f;
   border-color: rgba(92, 214, 154, 0.35);
 }
 
 .category.c1-2 {
   background: rgba(176, 151, 255, 0.2);
-  color: #f399ed;
   border-color: rgba(176, 151, 255, 0.35);
 }
 
 .category.c2 {
   background: rgba(176, 151, 255, 0.2);
-  color: #23c95b;
   border-color: rgba(176, 151, 255, 0.35);
 }
 
 .category.c2-3 {
   background: rgba(124, 86, 255, 0.2);
-  color: #8a75cf;
   border-color: rgba(124, 86, 255, 0.4);
 }
 
 .category.c3 {
   background: rgba(124, 86, 255, 0.2);
-  color: #4b2bb3;
   border-color: rgba(124, 86, 255, 0.4);
 }
 
 .category.c3-4 {
   background: rgba(139, 38, 38, 0.16);
-  color: #d68383;
   border-color: rgba(139, 38, 38, 0.35);
 }
 
 .category.c4 {
   background: rgba(139, 38, 38, 0.16);
-  color: #7a1d1d;
   border-color: rgba(139, 38, 38, 0.35);
 }
 
 .category.c4-5 {
   background: rgba(237, 57, 57, 0.2);
-  color: #dacf58;
   border-color: rgba(237, 57, 57, 0.4);
 }
 
 .category.c5 {
   background: rgba(237, 57, 57, 0.2);
-  color: #b51414;
+  /* color: #b51414; */
+  color: black;
   border-color: rgba(237, 57, 57, 0.4);
 }
 
